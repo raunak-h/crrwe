@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CRRWE</title>
+  <title>Constrained Round Robin Pairing</title>
   <style>
     :root { color-scheme: light dark; }
     body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7fb; color: #111; }
@@ -53,7 +53,7 @@
       </div>
       <button id="loadExclusionsBtn">Load my exclusion list</button>
       <div id="exclusionPanel" class="hidden">
-        <h3>Deselect people you do not want to be paired with</h3>
+        <h3>Uncheck people you do not want to be paired with</h3>
         <form id="exclusionForm"></form>
         <button id="submitExclusionsBtn" type="button">Save my exclusions</button>
       </div>
@@ -148,6 +148,10 @@
       return { pairs, bye };
     }
 
+    function clearChildren(node) {
+      while (node.firstChild) node.removeChild(node.firstChild);
+    }
+
     function render() {
       const ownerSetup = document.getElementById("ownerSetup");
       const participantEntry = document.getElementById("participantEntry");
@@ -175,20 +179,44 @@
         participantName.appendChild(opt);
       });
 
-      nameTags.innerHTML = state.names.map(n => `<span class="tag">${n}</span>`).join("");
+      clearChildren(nameTags);
+      state.names.forEach((name) => {
+        const chip = document.createElement("span");
+        chip.className = "tag";
+        chip.textContent = name;
+        nameTags.appendChild(chip);
+      });
 
-      progressList.innerHTML = state.names
-        .map(name => `<li>${name}: ${state.exclusions[name] ? "submitted" : "pending"}</li>`)
-        .join("");
+      clearChildren(progressList);
+      state.names.forEach((name) => {
+        const item = document.createElement("li");
+        item.textContent = `${name}: ${state.exclusions[name] ? "submitted" : "pending"}`;
+        progressList.appendChild(item);
+      });
 
       if (!state.rounds.length) {
         roundsView.textContent = "No rounds generated yet.";
       } else {
-        roundsView.innerHTML = state.rounds.map((round, idx) => {
-          const lines = round.pairs.map(p => `${p[0]} ↔ ${p[1]}`);
-          if (round.bye) lines.push(`${round.bye} has a bye`);
-          return `<div class="card"><strong>Round ${idx + 1}</strong><br>${lines.join("<br>")}</div>`;
-        }).join("");
+        clearChildren(roundsView);
+        state.rounds.forEach((round, idx) => {
+          const wrapper = document.createElement("div");
+          wrapper.className = "card";
+          const title = document.createElement("strong");
+          title.textContent = `Round ${idx + 1}`;
+          wrapper.appendChild(title);
+          wrapper.appendChild(document.createElement("br"));
+          round.pairs.forEach((pair) => {
+            const line = document.createElement("div");
+            line.textContent = `${pair[0]} ↔ ${pair[1]}`;
+            wrapper.appendChild(line);
+          });
+          if (round.bye) {
+            const byeLine = document.createElement("div");
+            byeLine.textContent = `${round.bye} has a bye`;
+            wrapper.appendChild(byeLine);
+          }
+          roundsView.appendChild(wrapper);
+        });
       }
 
       saveState();
@@ -221,11 +249,16 @@
         return;
       }
       form.innerHTML = "";
-      state.names.filter(n => n !== name).forEach(other => {
-        const id = `ex-${name}-${other}`;
-        const checked = !(state.exclusions[name] || []).includes(other);
+      state.names.filter(n => n !== name).forEach((other, idx) => {
+        const isAllowed = !(state.exclusions[name] || []).includes(other);
         const wrap = document.createElement("label");
-        wrap.innerHTML = `<input type="checkbox" id="${id}" data-other="${other}" ${checked ? "checked" : ""}/> ${other}`;
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.id = `ex-${idx}`;
+        input.dataset.other = other;
+        input.checked = isAllowed;
+        wrap.appendChild(input);
+        wrap.append(` ${other}`);
         form.appendChild(wrap);
       });
       panel.classList.remove("hidden");
@@ -238,8 +271,10 @@
         alert("Room code or name is invalid.");
         return;
       }
-      const allowed = [...document.querySelectorAll("#exclusionForm input[type=checkbox]:not(:checked)")].map(el => el.dataset.other);
-      state.exclusions[name] = allowed;
+      const exclusions = [...document.querySelectorAll("#exclusionForm input[type=checkbox]")]
+        .filter((checkbox) => !checkbox.checked)
+        .map((checkbox) => checkbox.dataset.other);
+      state.exclusions[name] = exclusions;
       document.getElementById("exclusionPanel").classList.add("hidden");
       alert("Saved.");
       render();
