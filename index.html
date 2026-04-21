@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CRRWE</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7fb; color: #111; }
+    main { max-width: 900px; margin: 24px auto; padding: 16px; background: #fff; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+    h1, h2, h3 { margin-top: 0; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .col { flex: 1 1 260px; }
+    input, textarea, button, select { width: 100%; padding: 8px; box-sizing: border-box; margin-top: 4px; margin-bottom: 12px; }
+    button { cursor: pointer; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin-bottom: 12px; background: #fff; }
+    .muted { color: #666; font-size: 0.95rem; }
+    .hidden { display: none; }
+    ul { padding-left: 20px; }
+    .tag { display: inline-block; background: #eef2ff; color: #1f2a5a; border-radius: 999px; padding: 4px 10px; margin: 2px 4px 2px 0; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Constrained Round Robin Pairing</h1>
+    <p class="muted">Single-page flow. Session autosaves locally in this browser.</p>
+
+    <section id="ownerSetup" class="card">
+      <h2>Room Owner Setup</h2>
+      <label>Room code
+        <input id="ownerRoomCode" placeholder="e.g. demo-room-01" />
+      </label>
+      <label>All participant names (one per line or comma-separated)
+        <textarea id="ownerNames" rows="6" placeholder="Alex&#10;Jordan&#10;Sam"></textarea>
+      </label>
+      <button id="saveRoomBtn">Save room</button>
+      <p class="muted">Enter all names at setup time. Participants can then submit exclusions from their own device using room code + their name.</p>
+    </section>
+
+    <section id="participantEntry" class="card hidden">
+      <h2>Participant Exclusion Entry</h2>
+      <div class="row">
+        <div class="col">
+          <label>Room code
+            <input id="participantRoomCode" />
+          </label>
+        </div>
+        <div class="col">
+          <label>Your name
+            <select id="participantName"></select>
+          </label>
+        </div>
+      </div>
+      <button id="loadExclusionsBtn">Load my exclusion list</button>
+      <div id="exclusionPanel" class="hidden">
+        <h3>Deselect people you do not want to be paired with</h3>
+        <form id="exclusionForm"></form>
+        <button id="submitExclusionsBtn" type="button">Save my exclusions</button>
+      </div>
+    </section>
+
+    <section id="ownerControl" class="card hidden">
+      <h2>Owner Control</h2>
+      <div>
+        <strong>Room:</strong> <span id="roomCodeView"></span><br />
+        <strong>Participants:</strong> <span id="participantCountView"></span>
+      </div>
+      <div id="nameTags"></div>
+      <button id="startSessionBtn">Start exclusion phase</button>
+      <button id="generateRoundBtn" class="hidden">Generate next round</button>
+      <button id="resetRoomBtn">Reset room</button>
+      <h3>Submission progress</h3>
+      <ul id="progressList"></ul>
+      <h3>Rounds</h3>
+      <div id="roundsView" class="muted">No rounds generated yet.</div>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "crrwe-room-v1";
+
+    function defaultState() {
+      return {
+        roomCode: "",
+        names: [],
+        started: false,
+        exclusions: {},
+        rounds: [],
+        pairCounts: {}
+      };
+    }
+
+    let state = loadState();
+
+    function normalizeNameList(raw) {
+      return [...new Set(raw.split(/[\n,]/).map(v => v.trim()).filter(Boolean))];
+    }
+
+    function pairKey(a, b) {
+      return [a, b].sort().join("::");
+    }
+
+    function loadState() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+        return parsed && typeof parsed === "object" ? { ...defaultState(), ...parsed } : defaultState();
+      } catch {
+        return defaultState();
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function canPair(a, b, exclusions) {
+      return !((exclusions[a] || []).includes(b) || (exclusions[b] || []).includes(a));
+    }
+
+    function generateRound(names, exclusions, pairCounts) {
+      const unpaired = [...names];
+      const pairs = [];
+      const byFewestOptions = () => {
+        unpaired.sort((x, y) => {
+          const xo = unpaired.filter(n => n !== x && canPair(x, n, exclusions)).length;
+          const yo = unpaired.filter(n => n !== y && canPair(y, n, exclusions)).length;
+          return xo - yo || x.localeCompare(y);
+        });
+      };
+      while (unpaired.length > 1) {
+        byFewestOptions();
+        const a = unpaired.shift();
+        const options = unpaired
+          .filter(b => canPair(a, b, exclusions))
+          .sort((b1, b2) => {
+            const c1 = pairCounts[pairKey(a, b1)] || 0;
+            const c2 = pairCounts[pairKey(a, b2)] || 0;
+            return c1 - c2 || b1.localeCompare(b2);
+          });
+        if (!options.length) {
+          return null;
+        }
+        const b = options[0];
+        unpaired.splice(unpaired.indexOf(b), 1);
+        pairs.push([a, b]);
+      }
+      const bye = unpaired.length ? unpaired[0] : null;
+      return { pairs, bye };
+    }
+
+    function render() {
+      const ownerSetup = document.getElementById("ownerSetup");
+      const participantEntry = document.getElementById("participantEntry");
+      const ownerControl = document.getElementById("ownerControl");
+      const generateRoundBtn = document.getElementById("generateRoundBtn");
+      const roundsView = document.getElementById("roundsView");
+      const progressList = document.getElementById("progressList");
+      const participantName = document.getElementById("participantName");
+      const nameTags = document.getElementById("nameTags");
+
+      ownerSetup.classList.toggle("hidden", !!state.roomCode);
+      participantEntry.classList.toggle("hidden", !state.roomCode || !state.started);
+      ownerControl.classList.toggle("hidden", !state.roomCode);
+      generateRoundBtn.classList.toggle("hidden", !state.started);
+
+      document.getElementById("roomCodeView").textContent = state.roomCode || "-";
+      document.getElementById("participantCountView").textContent = String(state.names.length);
+      document.getElementById("participantRoomCode").value = state.roomCode || "";
+
+      participantName.innerHTML = "";
+      state.names.forEach(name => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        participantName.appendChild(opt);
+      });
+
+      nameTags.innerHTML = state.names.map(n => `<span class="tag">${n}</span>`).join("");
+
+      progressList.innerHTML = state.names
+        .map(name => `<li>${name}: ${state.exclusions[name] ? "submitted" : "pending"}</li>`)
+        .join("");
+
+      if (!state.rounds.length) {
+        roundsView.textContent = "No rounds generated yet.";
+      } else {
+        roundsView.innerHTML = state.rounds.map((round, idx) => {
+          const lines = round.pairs.map(p => `${p[0]} ↔ ${p[1]}`);
+          if (round.bye) lines.push(`${round.bye} has a bye`);
+          return `<div class="card"><strong>Round ${idx + 1}</strong><br>${lines.join("<br>")}</div>`;
+        }).join("");
+      }
+
+      saveState();
+    }
+
+    document.getElementById("saveRoomBtn").addEventListener("click", () => {
+      const roomCode = document.getElementById("ownerRoomCode").value.trim();
+      const names = normalizeNameList(document.getElementById("ownerNames").value);
+      if (!roomCode || names.length < 2) {
+        alert("Enter a room code and at least 2 names.");
+        return;
+      }
+      state = { ...defaultState(), roomCode, names };
+      render();
+    });
+
+    document.getElementById("startSessionBtn").addEventListener("click", () => {
+      if (!state.roomCode) return;
+      state.started = true;
+      render();
+    });
+
+    document.getElementById("loadExclusionsBtn").addEventListener("click", () => {
+      const roomCode = document.getElementById("participantRoomCode").value.trim();
+      const name = document.getElementById("participantName").value;
+      const panel = document.getElementById("exclusionPanel");
+      const form = document.getElementById("exclusionForm");
+      if (roomCode !== state.roomCode || !state.names.includes(name)) {
+        alert("Room code or name is invalid.");
+        return;
+      }
+      form.innerHTML = "";
+      state.names.filter(n => n !== name).forEach(other => {
+        const id = `ex-${name}-${other}`;
+        const checked = !(state.exclusions[name] || []).includes(other);
+        const wrap = document.createElement("label");
+        wrap.innerHTML = `<input type="checkbox" id="${id}" data-other="${other}" ${checked ? "checked" : ""}/> ${other}`;
+        form.appendChild(wrap);
+      });
+      panel.classList.remove("hidden");
+    });
+
+    document.getElementById("submitExclusionsBtn").addEventListener("click", () => {
+      const roomCode = document.getElementById("participantRoomCode").value.trim();
+      const name = document.getElementById("participantName").value;
+      if (roomCode !== state.roomCode || !state.names.includes(name)) {
+        alert("Room code or name is invalid.");
+        return;
+      }
+      const allowed = [...document.querySelectorAll("#exclusionForm input[type=checkbox]:not(:checked)")].map(el => el.dataset.other);
+      state.exclusions[name] = allowed;
+      document.getElementById("exclusionPanel").classList.add("hidden");
+      alert("Saved.");
+      render();
+    });
+
+    document.getElementById("generateRoundBtn").addEventListener("click", () => {
+      const pending = state.names.filter(n => !state.exclusions[n]);
+      if (pending.length) {
+        alert(`Waiting on exclusions: ${pending.join(", ")}`);
+        return;
+      }
+      const nextRound = generateRound(state.names, state.exclusions, state.pairCounts);
+      if (!nextRound) {
+        alert("No valid round can be generated with current exclusions.");
+        return;
+      }
+      nextRound.pairs.forEach(([a, b]) => {
+        const key = pairKey(a, b);
+        state.pairCounts[key] = (state.pairCounts[key] || 0) + 1;
+      });
+      state.rounds.push(nextRound);
+      render();
+    });
+
+    document.getElementById("resetRoomBtn").addEventListener("click", () => {
+      if (!confirm("Reset local room data?")) return;
+      state = defaultState();
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
