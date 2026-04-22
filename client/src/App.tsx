@@ -24,6 +24,7 @@ export default function App() {
       <Routes>
         <Route path="/organizer" element={<OrganizerView />} />
         <Route path="/participant" element={<ParticipantView />} />
+        <Route path="/participants" element={<ParticipantView />} />
         <Route path="/display" element={<DisplayView />} />
         <Route path="*" element={<Navigate to="/participant" replace />} />
       </Routes>
