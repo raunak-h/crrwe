@@ -110,7 +110,7 @@ export default function SlotMachine({ names, resultA, resultB, onComplete, autoS
       <p className="text-[var(--muted)] text-sm uppercase tracking-widest">The draw</p>
       <div className="flex gap-8 items-end">
         <div className="flex flex-col items-center gap-2">
-          <span className="text-xs text-[var(--muted)] uppercase">Standing</span>
+          <span className="text-lg" title="Standing">🧍</span>
           <Drum
             names={names}
             result={resultA}
@@ -120,7 +120,7 @@ export default function SlotMachine({ names, resultA, resultB, onComplete, autoS
         </div>
         <div className="text-3xl text-[var(--muted)] pb-6">⟺</div>
         <div className="flex flex-col items-center gap-2">
-          <span className="text-xs text-[var(--muted)] uppercase">Seated</span>
+          <span className="text-lg" title="Seated">💺</span>
           <Drum
             names={names}
             result={resultB}

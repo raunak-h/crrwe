@@ -187,6 +187,22 @@ export function handleDrawComplete(): { ok: boolean; error?: string } {
   const state = getState();
   if (!state.phase.endsWith("_draw")) return { ok: false, error: "Not in draw phase" };
   const coords = currentPairCoords(state.phase)!;
+
+  // Round 4: skip song selection — auto-select the only remaining song
+  if (coords.roundIndex === 3) {
+    const pair = state.rounds[3].pairs[coords.pairIndex];
+    let newState = state;
+    if (pair.availableSongs.length > 0 && !pair.selectedSong) {
+      const selectedSong = pair.availableSongs[0];
+      const updatedPair = { ...pair, selectedSong };
+      newState = updatePair(state, 3, coords.pairIndex, updatedPair);
+      markSongUsed(newState, selectedSong);
+    }
+    const np: PhaseId = `round_4_pair_${coords.pairIndex}_props`;
+    save({ ...newState, phase: np, drawRevealComplete: true });
+    return { ok: true };
+  }
+
   const np: PhaseId = `round_${coords.roundIndex + 1}_pair_${coords.pairIndex}_song`;
   save({ ...state, phase: np, drawRevealComplete: true });
   return { ok: true };
@@ -299,6 +315,29 @@ export function handleConfirmProps(participantId: string): { ok: boolean; error?
   const np: PhaseId = `round_${coords.roundIndex + 1}_pair_${coords.pairIndex}_perform`;
   const updatedPair = { ...pair, propsConfirmedBy: participantId };
   save({ ...updatePair(state, coords.roundIndex, coords.pairIndex, updatedPair), phase: np });
+  return { ok: true };
+}
+
+export function handleRejectProps(participantId: string): { ok: boolean; error?: string } {
+  const state = getState();
+  if (!state.phase.endsWith("_props")) return { ok: false, error: "Not in props phase" };
+
+  const coords = currentPairCoords(state.phase)!;
+  const pair = state.rounds[coords.roundIndex].pairs[coords.pairIndex];
+  if (!pair.propsSubmittedBy) return { ok: false, error: "Nothing submitted yet" };
+  if (participantId === pair.propsSubmittedBy) return { ok: false, error: "You submitted — only the other person can reject" };
+  if (participantId !== pair.participantA && participantId !== pair.participantB)
+    return { ok: false, error: "Not your turn" };
+
+  // Clear the submission so the pair can try again
+  const updatedPair = {
+    ...pair,
+    selectedProp: null,
+    selectedFurniture: [],
+    propsSubmittedBy: null,
+    propsConfirmedBy: null,
+  };
+  save(updatePair(state, coords.roundIndex, coords.pairIndex, updatedPair));
   return { ok: true };
 }
 

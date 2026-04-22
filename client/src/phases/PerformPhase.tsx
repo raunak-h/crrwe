@@ -1,6 +1,7 @@
 import { useGameStore } from "../store/gameStore";
 import { sendMessage } from "../socket/useSocket";
 import { Song } from "../socket/protocol";
+import { PROPS, FURNITURE } from "../components/PropGrid";
 
 interface Props {
   participantId?: string;
@@ -39,13 +40,13 @@ export default function PerformPhase({ participantId, isOrganizer, isDisplay, ro
       </div>
 
       <div className={`flex gap-8 items-center ${isDisplay ? "text-3xl" : "text-xl"}`}>
-        <div>
-          <div className="text-[var(--muted)] text-sm mb-1">Standing</div>
+        <div className="text-center">
+          <div className="text-2xl mb-1" title="Standing">🧍</div>
           <div className="font-bold">{standingPerson?.name}</div>
         </div>
         <div className="text-[var(--muted)]">⟺</div>
-        <div>
-          <div className="text-[var(--muted)] text-sm mb-1">Seated</div>
+        <div className="text-center">
+          <div className="text-2xl mb-1" title="Seated">💺</div>
           <div className="font-bold">{seatedPerson?.name}</div>
         </div>
       </div>
@@ -74,10 +75,18 @@ export default function PerformPhase({ participantId, isOrganizer, isDisplay, ro
       )}
 
       {pair.selectedProp && (
-        <div className="text-[var(--muted)] text-sm">
-          Prop: <span className="text-white">{pair.selectedProp.replace("_", " ")}</span>
-          {" · "}
-          Furniture: <span className="text-white">{pair.selectedFurniture.map((f) => f.replace("_", " ")).join(" & ")}</span>
+        <div className="flex items-center gap-4 text-sm text-[var(--muted)]">
+          <span className="flex items-center gap-1">
+            <span className="text-xl">{PROPS.find((p) => p.value === pair.selectedProp)?.emoji}</span>
+            <span>{PROPS.find((p) => p.value === pair.selectedProp)?.label}</span>
+          </span>
+          <span>·</span>
+          {pair.selectedFurniture.map((f) => (
+            <span key={f} className="flex items-center gap-1">
+              <span className="text-xl">{FURNITURE.find((x) => x.value === f)?.emoji}</span>
+              <span>{FURNITURE.find((x) => x.value === f)?.label}</span>
+            </span>
+          ))}
         </div>
       )}
 
@@ -91,7 +100,7 @@ export default function PerformPhase({ participantId, isOrganizer, isDisplay, ro
       )}
 
       {!isOrganizer && !isDisplay && (
-        <p className="text-[var(--muted)] text-sm">Waiting for organizer to advance…</p>
+        <p className="text-[var(--accent)] text-lg font-bold">Let's go!</p>
       )}
     </div>
   );

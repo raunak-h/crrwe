@@ -1,8 +1,30 @@
 import { useState } from "react";
 import { useGameStore } from "../store/gameStore";
 import { sendMessage } from "../socket/useSocket";
-import PropGrid from "../components/PropGrid";
+import PropGrid, { PROPS, FURNITURE } from "../components/PropGrid";
 import { Prop, Furniture } from "../socket/protocol";
+
+function PropFurnitureDisplay({ prop, furniture }: { prop: string | null; furniture: string[] }) {
+  const propDef = PROPS.find((p) => p.value === prop);
+  const furnitureDefs = furniture.map((f) => FURNITURE.find((x) => x.value === f)).filter(Boolean);
+  return (
+    <div className="flex items-center gap-3 justify-center flex-wrap">
+      {propDef && (
+        <span className="flex items-center gap-1">
+          <span className="text-2xl">{propDef.emoji}</span>
+          <span className="font-bold">{propDef.label}</span>
+        </span>
+      )}
+      {furnitureDefs.length > 0 && <span className="text-[var(--muted)]">·</span>}
+      {furnitureDefs.map((f) => f && (
+        <span key={f.value} className="flex items-center gap-1">
+          <span className="text-2xl">{f.emoji}</span>
+          <span>{f.label}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 interface Props {
   participantId?: string;
@@ -46,8 +68,9 @@ export default function PropSelectPhase({ participantId, isOrganizer, isDisplay,
     sendMessage({ type: "CONFIRM_PROPS", participantId });
   }
 
-  function handleOverride() {
-    sendMessage({ type: "OVERRIDE_PROPS" });
+  function handleReject() {
+    if (!participantId) return;
+    sendMessage({ type: "REJECT_PROPS", participantId });
   }
 
   if (!pair) return null;
@@ -57,13 +80,8 @@ export default function PropSelectPhase({ participantId, isOrganizer, isDisplay,
     return (
       <div className="max-w-lg mx-auto py-8 px-4 space-y-4 text-center">
         <p className="text-green-400 text-xl">✓ Selection confirmed</p>
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6 space-y-2">
-          <p className="text-lg font-bold">
-            Prop: {pair.selectedProp.replace("_", " ")}
-          </p>
-          <p className="text-[var(--muted)]">
-            Furniture: {pair.selectedFurniture.map((f) => f.replace("_", " ")).join(" & ")}
-          </p>
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
+          <PropFurnitureDisplay prop={pair.selectedProp} furniture={pair.selectedFurniture} />
         </div>
       </div>
     );
@@ -81,10 +99,9 @@ export default function PropSelectPhase({ participantId, isOrganizer, isDisplay,
   if (isDisplay) {
     if (submitted && pair.selectedProp) {
       return (
-        <div className="text-center py-12 space-y-2">
+        <div className="text-center py-12 space-y-4">
           <p className="text-[var(--muted)]">Proposed selection:</p>
-          <p className="text-2xl font-bold">{pair.selectedProp.replace("_", " ")}</p>
-          <p className="text-[var(--muted)]">{pair.selectedFurniture.map((f) => f.replace("_", " ")).join(" & ")}</p>
+          <PropFurnitureDisplay prop={pair.selectedProp} furniture={pair.selectedFurniture} />
           <p className="text-sm text-yellow-300">Awaiting confirmation…</p>
         </div>
       );
@@ -99,37 +116,31 @@ export default function PropSelectPhase({ participantId, isOrganizer, isDisplay,
         <div className="text-center py-12 space-y-3">
           <p className="text-[var(--muted)]">Waiting for {peerName} to confirm…</p>
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
-            <p className="font-bold">{pair.selectedProp.replace("_", " ")}</p>
-            <p className="text-[var(--muted)] text-sm">{pair.selectedFurniture.map((f) => f.replace("_", " ")).join(" & ")}</p>
+            <PropFurnitureDisplay prop={pair.selectedProp} furniture={pair.selectedFurniture} />
           </div>
-          {isOrganizer && (
-            <button onClick={handleOverride} className="px-4 py-2 rounded-lg bg-yellow-600 text-black font-semibold text-sm">
-              Override & Advance
-            </button>
-          )}
         </div>
       );
     }
-    // Other person needs to confirm
+    // Other person needs to confirm or reject
     return (
       <div className="max-w-sm mx-auto py-8 px-4 space-y-4 text-center">
         <p className="text-lg">{peerName} proposes:</p>
         <div className="bg-[var(--surface)] border border-[var(--accent)] rounded-xl p-4">
-          <p className="font-bold text-xl">{pair.selectedProp.replace("_", " ")}</p>
-          <p className="text-[var(--muted)]">{pair.selectedFurniture.map((f) => f.replace("_", " ")).join(" & ")}</p>
+          <PropFurnitureDisplay prop={pair.selectedProp} furniture={pair.selectedFurniture} />
         </div>
         <div className="flex gap-3 justify-center">
+          <button
+            onClick={handleReject}
+            className="px-6 py-2 rounded-xl bg-red-700 text-white font-bold"
+          >
+            ✗ Reject
+          </button>
           <button
             onClick={handleConfirm}
             className="px-6 py-2 rounded-xl bg-green-600 text-white font-bold"
           >
             ✓ Confirm
           </button>
-          {isOrganizer && (
-            <button onClick={handleOverride} className="px-4 py-2 rounded-lg bg-yellow-600 text-black font-semibold text-sm">
-              Override
-            </button>
-          )}
         </div>
       </div>
     );
@@ -158,15 +169,6 @@ export default function PropSelectPhase({ participantId, isOrganizer, isDisplay,
           className="w-full py-3 rounded-xl bg-[var(--accent)] text-black font-bold disabled:opacity-40"
         >
           Propose Selection
-        </button>
-      )}
-
-      {isOrganizer && (
-        <button
-          onClick={handleOverride}
-          className="w-full py-2 rounded-xl bg-yellow-600 text-black font-semibold text-sm"
-        >
-          Skip / Override
         </button>
       )}
     </div>

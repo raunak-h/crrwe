@@ -1,12 +1,12 @@
 import { Prop, Furniture } from "../socket/protocol";
 
-const PROPS: { value: Prop; label: string; emoji: string }[] = [
+export const PROPS: { value: Prop; label: string; emoji: string }[] = [
   { value: "mop", label: "Mop", emoji: "🧹" },
   { value: "sash_ribbon", label: "Sash Ribbon", emoji: "🎀" },
   { value: "belt", label: "Belt", emoji: "👟" },
 ];
 
-const FURNITURE: { value: Furniture; label: string; emoji: string }[] = [
+export const FURNITURE: { value: Furniture; label: string; emoji: string }[] = [
   { value: "chair", label: "Chair", emoji: "🪑" },
   { value: "table", label: "Table", emoji: "🪵" },
   { value: "wide_couch", label: "Wide Couch", emoji: "🛋️" },

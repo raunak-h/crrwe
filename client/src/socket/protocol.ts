@@ -81,6 +81,7 @@ export type ClientMessage =
   | { type: "BREAK_SONG_TIE"; songId: string }
   | { type: "SUBMIT_PROPS"; participantId: string; prop: Prop; furniture: Furniture[] }
   | { type: "CONFIRM_PROPS"; participantId: string }
+  | { type: "REJECT_PROPS"; participantId: string }
   | { type: "OVERRIDE_PROPS" };
 
 // WS Messages — Server → Client

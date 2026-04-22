@@ -14,6 +14,7 @@ import {
   handleBreakSongTie,
   handleSubmitProps,
   handleConfirmProps,
+  handleRejectProps,
   handleOverrideProps,
   handleSubmitSongs,
   handleSetExclusions,
@@ -161,6 +162,10 @@ export function handleMessage(ws: WebSocket, raw: string): void {
 
     case "CONFIRM_PROPS":
       dispatch(handleConfirmProps(msg.participantId as string));
+      break;
+
+    case "REJECT_PROPS":
+      dispatch(handleRejectProps(msg.participantId as string));
       break;
 
     case "OVERRIDE_PROPS":
