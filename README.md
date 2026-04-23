@@ -10,6 +10,7 @@ A dynamic, social performance game where 8 participants progress through structu
 - [Developer Notes](#developer-notes)
 - [Technical Stack](#technical-stack)
 - [Getting Started](#getting-started)
+- [Changelog](CHANGELOG.md)
 
 ---
 
@@ -95,27 +96,29 @@ Each round involves:
 - Participants experience the opposite role
 - Allows each person to try both positions
 
-#### Round 3: Pairs Shifted
-- Pairings are rotated (A₁ with B₂, A₂ with B₃, A₃ with B₄, A₄ with B₁)
+#### Round 3: Pairs Re-shuffled
+- Pairings are **randomised** — each A is matched with a different B than in Rounds 1 & 2, chosen via an exclusion-aware backtracking search
 - Standing Role = Group A / Seated Role = Group B (reverted to original)
-- Creates new partnerships and variety
+- Creates new, unpredictable partnerships while still respecting all exclusions
 
-#### Round 4: Shifted + Roles Reversed
+#### Round 4: Re-shuffled + Roles Reversed
 - **Same pairs** as Round 3
 - Standing Role = Group B / Seated Role = Group A (swapped again)
-- Final round with maximum diversity in experiences
+- Final round; song selection is **skipped** — the only remaining available song is auto-selected, and play goes straight to props & furniture
 
 ### Sub-Phase Details (Per Pair, Per Round)
 
 Each pair goes through 4 sequential sub-phases:
 
 #### Sub-Phase A: **The Draw** 🎰
-- **Animation**: A slot-machine animation randomly "draws" which participant gets which role for this round
+- **Animation**: A slot-machine animation reveals which participant gets which role for this round — 🧍 Standing or 💺 Seated
+- **No early reveal**: The TV/display goes straight into the animation; pairings are never shown in advance, preserving suspense for rounds 1 and 3
 - **Outcome**: Determines who stands and who sits for this specific performance
 - **Participants See**: Organizers and displays watch the draw; the active pair observes the outcome
-- **Next Step**: Automatically advances to song selection
+- **Next Step**: Automatically advances to song selection (or directly to props in Round 4)
 
 #### Sub-Phase B: **Song Selection** 🎵
+- **Skipped in Round 4**: By Round 4 exactly one song remains available per pair; it is auto-selected and play advances directly to props
 - **Available Songs**: The 2 participants draw from a pool of available songs not yet used in previous rounds
 - **Voting**: Both participants in the pair **vote** on which song to perform to
   - Each person votes for their preferred song
@@ -127,17 +130,20 @@ Each pair goes through 4 sequential sub-phases:
 
 #### Sub-Phase C: **Props & Furniture Selection**
 - **Selecting Participant**: One member of the pair submits prop and furniture selections
-  - **Props** (pick one): Mop, Sash/Ribbon, or Belt
-  - **Furniture** (pick up to 2): Chair, Table, or Wide Couch
-- **Confirming Participant**: The other member confirms the selections
+  - **Props** (pick one): 🧹 Mop, 🎀 Sash/Ribbon, or 👟 Belt
+  - **Furniture** (pick 2): 🪑 Chair, 🪵 Table, or 🛋️ Wide Couch
+- **Confirming Participant**: The other member sees the proposal and either:
+  - ✓ **Confirms** — locks in the selection and advances to performance
+  - ✗ **Rejects** — sends it back so the pair can try again with a different selection
 - **Choreography Guidance**: Props and furniture inform the choreography and performance style
-- **Next Step**: Advances to performance once both selections are submitted and confirmed
+- **Next Step**: Advances to performance once a selection is confirmed
 
 #### Sub-Phase D: **Performance** ✨
-- **Display**: Full performance information displayed on organizer screens
-  - Pair names (with assigned roles)
+- **Display**: Full performance information shown on organizer and participant screens
+  - Pair names with 🧍 Standing / 💺 Seated role icons
   - Song & vibe (with playable link)
-  - Prop and furniture selections
+  - Prop and furniture shown as emoji icons (not plain text)
+  - Participants' phones show **"Let's go!"** as a cue to begin
 - **Live Performance**: The pair performs a spontaneous choreographed routine to the selected song, using the props and furniture as inspiration
 - **Organizer Control**: After performance concludes, organizer advances to the next draw (or next round if complete)
 - **Next Step**: Moves to the next pair in the round, or to the next round if all 4 pairs have performed
@@ -304,12 +310,18 @@ $$
 
 Standing role = B, Seated role = A.
 
-#### Round 3 Pairs
+#### Round 3 Pairs (Randomised Alternative Matching)
+
+Instead of a fixed cyclic shift, Round 3 computes a **random valid permutation** $\sigma$ of $\{0,1,2,3\}$ such that:
+
+1. $\sigma(i) \neq i$ for all $i$ — every A participant gets a different B partner than in Rounds 1 & 2
+2. $(A_i, B_{\sigma(i)})$ is not an excluded pair for any $i$
+
 $$
-\text{Pair}_i = (A_i, B_{(\pi(i) + 1) \mod 4}) \quad \text{for } i \in \{0, 1, 2, 3\}
+\text{Pair}_i = (A_i, B_{\sigma(i)}) \quad \text{for } i \in \{0, 1, 2, 3\}
 $$
 
-This shifts the pairing by rotating the indices in group B by 1 position.
+The algorithm shuffles candidate B indices randomly before backtracking, producing a different valid alternative matching each game.
 
 Standing role = A, Seated role = B.
 
@@ -318,7 +330,7 @@ $$
 \text{Same pairs as Round 3, but roles swapped}
 $$
 
-Standing role = B, Seated role = A.
+Standing role = B, Seated role = A. Song selection is skipped — the only remaining available song is auto-selected.
 
 ### Song Pool Management
 
@@ -435,7 +447,8 @@ interface GameState {
 Core pairing logic:
 
 - `computePairings(groupA, groupB)`: Implements backtracking to find a perfect bipartite matching respecting exclusions
-- `buildPairsForRound(orderedA, orderedB, roundNumber, shifted)`: Constructs pair objects from group orderings and round-specific shifts
+- `findAlternativePermutation(orderedA, orderedB)`: Finds a random valid permutation for rounds 3/4 where each A[i] gets a different B than in round 1/2, respecting exclusions via shuffled backtracking
+- `buildPairsForRound(orderedA, bOrder, roundNumber)`: Constructs pair objects given a pre-computed B ordering
 
 #### Server: `src/engine/phaseRunner.ts`
 Game flow orchestration:
@@ -496,6 +509,7 @@ Reusable UI components:
 { type: "BREAK_SONG_TIE", songId: string }
 { type: "SUBMIT_PROPS", participantId: string, prop: Prop, furniture: Furniture[] }
 { type: "CONFIRM_PROPS", participantId: string }
+{ type: "REJECT_PROPS", participantId: string }
 { type: "DRAW_COMPLETE" }
 ```
 
